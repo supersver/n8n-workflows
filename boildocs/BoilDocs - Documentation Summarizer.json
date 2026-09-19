@@ -1,0 +1,402 @@
+{
+  "name": "BoilDocs - Documentation Summarizer",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "docs-summarizer",
+        "responseMode": "responseNode",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "8619b494-41e6-4f5a-a540-af6102560027",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -464,
+        112
+      ],
+      "webhookId": "docs-summarizer"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.body.type }}",
+              "rightValue": "url",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "668bba6a-406b-4bbd-a0b4-6b557538a7fb",
+      "name": "Is URL?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -240,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.body.value }}",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "maxRedirects": 5
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "2831c572-4b4a-4a0e-bcb3-d16f04971116",
+      "name": "Fetch Documentation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.data ?? $json.body ?? $json;\nconst html = typeof raw === 'string' ? raw : JSON.stringify(raw);\nconst withoutNoise = html\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<nav[\\s\\S]*?<\\/nav>/gi, ' ')\n  .replace(/<footer[\\s\\S]*?<\\/footer>/gi, ' ')\n  .replace(/<header[\\s\\S]*?<\\/header>/gi, ' ')\n  .replace(/<svg[\\s\\S]*?<\\/svg>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/&nbsp;/gi, ' ')\n  .replace(/&amp;/gi, '&')\n  .replace(/&lt;/gi, '<')\n  .replace(/&gt;/gi, '>')\n  .replace(/\\s+/g, ' ')\n  .trim();\nreturn [{ json: { sourceType: 'url', source: $item(0).$node['Webhook'].json.body.value, title: $item(0).$node['Webhook'].json.body.value, content: withoutNoise.slice(0, 70000) } }];"
+      },
+      "id": "df2d7b81-f947-4ec8-9117-634b8e646dcf",
+      "name": "Clean URL Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "text-source",
+              "name": "sourceType",
+              "value": "text",
+              "type": "string"
+            },
+            {
+              "id": "text-url",
+              "name": "source",
+              "value": "={{ $json.body.value }}",
+              "type": "string"
+            },
+            {
+              "id": "text-title",
+              "name": "title",
+              "value": "Pasted documentation",
+              "type": "string"
+            },
+            {
+              "id": "text-content",
+              "name": "content",
+              "value": "={{ $json.body.value }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8d085777-ab26-4b70-b208-bf4cb16b17e9",
+      "name": "Prepare Text",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        208
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "dd8f0d30-8a43-4855-9bc4-90839a93fe75",
+      "name": "Combine Source",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        464,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openRouterApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: 'openrouter/free', temperature: 0.2, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: 'You are a senior developer advocate. Summarize technical documentation into structured notes for another developer. Be accurate, concrete, and avoid inventing APIs. Return ONLY valid JSON matching the requested schema.' }, { role: 'user', content: `Create a summary using this schema exactly: {title:string, source:string, sourceType:'url'|'text', oneLiner:string, readingTime:number, difficulty:'Beginner'|'Intermediate'|'Advanced', concepts:string[], sections:[{title:string, paragraphs:string[], bullets?:string[], code?:string}], quickStart?:string, caveats?:string[], generatedAt:string}. Source type: ${$json.sourceType}. Source: ${$json.source}. Documentation: ${$json.content}` }] }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "1b367689-d48c-45cd-9b95-f689544f173f",
+      "name": "Generate Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        112
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "JfsEb0klRtcfvu2o",
+          "name": "OpenAI account"
+        },
+        "openRouterApi": {
+          "id": "H5axlitmB2xwhbca",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json;\nconst content = body.choices?.[0]?.message?.content ?? body.output_text ?? '';\nlet parsed;\ntry { parsed = JSON.parse(content); } catch {\n  const match = content.match(/\\{[\\s\\S]*\\}/);\n  if (!match) throw new Error('LLM did not return valid JSON');\n  parsed = JSON.parse(match[0]);\n}\nif (!parsed.title || !Array.isArray(parsed.sections)) throw new Error('Summary shape is invalid');\nreturn [{ json: { ...parsed, generatedAt: parsed.generatedAt || new Date().toISOString() } }];"
+      },
+      "id": "f40299da-99bc-437f-b66c-02a7a7e1aa13",
+      "name": "Validate Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "c2667ebe-c157-452e-b4f2-61bd5a2ecff7",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1200,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Documentation Ingestion\n\nThis branch handles external documentation URLs.\n\nThe HTML is fetched first, then converted into plain text\nbefore being passed to the summarization step.\n\nKeep extraction separate from the LLM step so the model\nreceives clean, predictable input.\n",
+        "height": 336,
+        "width": 400
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -16,
+        -384
+      ],
+      "typeVersion": 1,
+      "id": "5ffdc8f2-cfaa-4c91-8dcd-43b3ca48c9ef",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## AI Summarization\n\nUses OpenRouter's free model router.\n\nThe prompt requires a strict JSON schema because the\nReact frontend consumes the response programmatically.\n\nDo not remove `response_format`.",
+        "height": 304,
+        "width": 304
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        624,
+        288
+      ],
+      "typeVersion": 1,
+      "id": "619798e7-e971-412e-8f2d-0ec97a5a684b",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "# BoilDocs — Documentation Summarizer\n\nTurns technical documentation into structured developer notes.\n\n## Flow\n\n1. Receive a documentation URL or pasted text.\n2. Fetch the documentation when a URL is provided.\n3. Clean the HTML into readable text.\n4. Send the content to an OpenRouter free model.\n5. Force a predictable JSON response.\n6. Validate the generated structure.\n7. Return the result to the React frontend.\n\n## External Services\n\n- OpenRouter — LLM inference\n- Documentation URL — source content\n\n## Security\n\n- Never commit API credentials.\n- OpenRouter credentials are stored in n8n.\n- Webhook should be protected before production use.\n\n## Frontend Contract\n\nPOST /webhook/boildocs\n\nInput:\n- sourceType: `url` | `text`\n- source: string\n\nOutput:\n- title\n- oneLiner\n- concepts\n- sections\n- quickStart\n- caveats\n\n## Developed and maintained by https://github.com/supersver\n\n## Checkout more workflows at https://github.com/supersver/n8n-workflows",
+        "height": 1200,
+        "width": 512
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1184,
+        -304
+      ],
+      "typeVersion": 1,
+      "id": "16aea8de-1bc9-4f15-8c83-13ed598c8b0b",
+      "name": "Sticky Note2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Is URL?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is URL?": {
+      "main": [
+        [
+          {
+            "node": "Fetch Documentation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Documentation": {
+      "main": [
+        [
+          {
+            "node": "Clean URL Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean URL Content": {
+      "main": [
+        [
+          {
+            "node": "Combine Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Text": {
+      "main": [
+        [
+          {
+            "node": "Combine Source",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Combine Source": {
+      "main": [
+        [
+          {
+            "node": "Generate Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Summary": {
+      "main": [
+        [
+          {
+            "node": "Validate Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Output": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "1c4eb71c-52c2-4f7d-904f-2887a80fb3cb",
+  "meta": {
+    "instanceId": "9f75d1fc3566e8ba8532fa2360ae002e6c99078f3117017ce79eaca2932ff433"
+  },
+  "nodeGroups": [],
+  "id": "6cX0syQKDY6wwtAU",
+  "tags": []
+}
