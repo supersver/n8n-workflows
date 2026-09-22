@@ -4,9 +4,11 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "docs-summarizer",
+        "path": "boildocs",
+        "authentication": "headerAuth",
         "responseMode": "responseNode",
         "options": {
+          "allowedOrigins": "https://boildocs.vercel.app",
           "responseHeaders": {
             "entries": [
               {
@@ -25,15 +27,21 @@
           }
         }
       },
-      "id": "8619b494-41e6-4f5a-a540-af6102560027",
+      "id": "4da461dd-22cd-445f-af5b-0042a9476748",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        -464,
-        112
+        -192,
+        352
       ],
-      "webhookId": "docs-summarizer"
+      "webhookId": "docs-summarizer",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "15jLQcLVTibCuyZ9",
+          "name": "Header Auth account"
+        }
+      }
     },
     {
       "parameters": {
@@ -58,13 +66,13 @@
         },
         "options": {}
       },
-      "id": "668bba6a-406b-4bbd-a0b4-6b557538a7fb",
+      "id": "e8185d3f-438b-47bc-b37f-4f397a195403",
       "name": "Is URL?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -240,
-        112
+        32,
+        352
       ]
     },
     {
@@ -84,26 +92,26 @@
           "timeout": 20000
         }
       },
-      "id": "2831c572-4b4a-4a0e-bcb3-d16f04971116",
+      "id": "69e05473-7544-47e3-9163-8f5ab4a3cbc3",
       "name": "Fetch Documentation",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        0,
-        0
+        272,
+        240
       ]
     },
     {
       "parameters": {
         "jsCode": "const raw = $json.data ?? $json.body ?? $json;\nconst html = typeof raw === 'string' ? raw : JSON.stringify(raw);\nconst withoutNoise = html\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<nav[\\s\\S]*?<\\/nav>/gi, ' ')\n  .replace(/<footer[\\s\\S]*?<\\/footer>/gi, ' ')\n  .replace(/<header[\\s\\S]*?<\\/header>/gi, ' ')\n  .replace(/<svg[\\s\\S]*?<\\/svg>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/&nbsp;/gi, ' ')\n  .replace(/&amp;/gi, '&')\n  .replace(/&lt;/gi, '<')\n  .replace(/&gt;/gi, '>')\n  .replace(/\\s+/g, ' ')\n  .trim();\nreturn [{ json: { sourceType: 'url', source: $item(0).$node['Webhook'].json.body.value, title: $item(0).$node['Webhook'].json.body.value, content: withoutNoise.slice(0, 70000) } }];"
       },
-      "id": "df2d7b81-f947-4ec8-9117-634b8e646dcf",
+      "id": "90fa96ef-b63c-4bc9-9709-1a49ab3e4b34",
       "name": "Clean URL Content",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        240,
-        0
+        512,
+        240
       ]
     },
     {
@@ -138,24 +146,24 @@
         },
         "options": {}
       },
-      "id": "8d085777-ab26-4b70-b208-bf4cb16b17e9",
+      "id": "c622f78b-c0a7-469f-b1ac-c9babf7e9e3c",
       "name": "Prepare Text",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        0,
-        208
+        272,
+        448
       ]
     },
     {
       "parameters": {},
-      "id": "dd8f0d30-8a43-4855-9bc4-90839a93fe75",
+      "id": "50b00725-81b1-4ff8-b307-a7adee34b891",
       "name": "Combine Source",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
       "position": [
-        464,
-        112
+        736,
+        352
       ]
     },
     {
@@ -181,21 +189,17 @@
           "timeout": 60000
         }
       },
-      "id": "1b367689-d48c-45cd-9b95-f689544f173f",
+      "id": "25b4b8c0-2c8f-4854-822e-a7f75d005d3b",
       "name": "Generate Summary",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        720,
-        112
+        992,
+        352
       ],
       "credentials": {
-        "openAiApi": {
-          "id": "JfsEb0klRtcfvu2o",
-          "name": "OpenAI account"
-        },
         "openRouterApi": {
-          "id": "H5axlitmB2xwhbca",
+          "id": "irKvBwu0JpaoQGUp",
           "name": "OpenRouter account"
         }
       }
@@ -204,13 +208,13 @@
       "parameters": {
         "jsCode": "const body = $json;\nconst content = body.choices?.[0]?.message?.content ?? body.output_text ?? '';\nlet parsed;\ntry { parsed = JSON.parse(content); } catch {\n  const match = content.match(/\\{[\\s\\S]*\\}/);\n  if (!match) throw new Error('LLM did not return valid JSON');\n  parsed = JSON.parse(match[0]);\n}\nif (!parsed.title || !Array.isArray(parsed.sections)) throw new Error('Summary shape is invalid');\nreturn [{ json: { ...parsed, generatedAt: parsed.generatedAt || new Date().toISOString() } }];"
       },
-      "id": "f40299da-99bc-437f-b66c-02a7a7e1aa13",
+      "id": "8e33e206-7baf-4ace-9394-21c254ecaaf5",
       "name": "Validate Output",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        960,
-        112
+        1232,
+        352
       ]
     },
     {
@@ -233,13 +237,13 @@
           }
         }
       },
-      "id": "c2667ebe-c157-452e-b4f2-61bd5a2ecff7",
+      "id": "cd932fbd-b09c-44a7-8f7f-c42568aeb262",
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        1200,
-        112
+        1472,
+        352
       ]
     },
     {
@@ -250,11 +254,11 @@
       },
       "type": "n8n-nodes-base.stickyNote",
       "position": [
-        -16,
-        -384
+        256,
+        -144
       ],
       "typeVersion": 1,
-      "id": "5ffdc8f2-cfaa-4c91-8dcd-43b3ca48c9ef",
+      "id": "0870bf40-40ec-4cb9-970e-7046cd91972a",
       "name": "Sticky Note"
     },
     {
@@ -265,11 +269,11 @@
       },
       "type": "n8n-nodes-base.stickyNote",
       "position": [
-        624,
-        288
+        896,
+        528
       ],
       "typeVersion": 1,
-      "id": "619798e7-e971-412e-8f2d-0ec97a5a684b",
+      "id": "868aaffc-94ad-4f4f-9e44-b0a0bbec4ff4",
       "name": "Sticky Note1"
     },
     {
@@ -280,11 +284,11 @@
       },
       "type": "n8n-nodes-base.stickyNote",
       "position": [
-        -1184,
-        -304
+        -912,
+        -64
       ],
       "typeVersion": 1,
-      "id": "16aea8de-1bc9-4f15-8c83-13ed598c8b0b",
+      "id": "454b8838-d6dc-4695-8d4f-a855cf6c4906",
       "name": "Sticky Note2"
     }
   ],
@@ -386,17 +390,17 @@
       ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1",
-    "binaryMode": "separate",
-    "availableInMCP": false
+    "binaryMode": "separate"
   },
-  "versionId": "1c4eb71c-52c2-4f7d-904f-2887a80fb3cb",
+  "versionId": "c285832e-900b-40e4-a18d-09d74b718ab1",
   "meta": {
-    "instanceId": "9f75d1fc3566e8ba8532fa2360ae002e6c99078f3117017ce79eaca2932ff433"
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4491a4c26f8b0e51e67989f447ee9fcb8e05b457b31e3295f34370c47e298693"
   },
   "nodeGroups": [],
-  "id": "6cX0syQKDY6wwtAU",
+  "id": "c9zN1bXUF3PU2r4s",
   "tags": []
 }
